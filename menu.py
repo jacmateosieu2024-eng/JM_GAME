@@ -42,7 +42,7 @@ class Menu:
 
 def settings_menu(surface, current_state, events):
     """Handle settings update and rendering."""
-    menu = Menu("Paramètres", ["Vitesse", "Plein écran", "Heat haze", "Retour"])
+    menu = Menu("Paramètres", ["Vitesse", "Plein écran", "Heat haze", "Luminosité nuit", "Retour"])
     menu.index = current_state.get("index", 0)
 
     choice = menu.update(events)
@@ -53,9 +53,10 @@ def settings_menu(surface, current_state, events):
     width, height = surface.get_size()
     font = pygame.font.Font(config.DEFAULT_FONT, 20)
     info = [
-        f"Vitesse: {config.PLAYER_SPEEDS[current_state['speed_index']]:.1f}",
+        f"Vitesse: {config.PLAYER_SPEEDS[current_state['speed_index']]} px/s",
         f"Plein écran: {'Oui' if current_state['fullscreen'] else 'Non'}",
         f"Heat haze: {'On' if current_state['heat_haze'] else 'Off'}",
+        f"Nuit: niveau {current_state['night_level'] + 1}/{len(config.NIGHT_LEVELS)}",
     ]
     for i, line in enumerate(info):
         text = font.render(line, True, (230, 220, 200))
@@ -71,6 +72,8 @@ def settings_menu(surface, current_state, events):
                 elif menu.index == 2:
                     current_state["heat_haze"] = not current_state["heat_haze"]
                 elif menu.index == 3:
+                    current_state["night_level"] = (current_state["night_level"] + 1) % len(config.NIGHT_LEVELS)
+                elif menu.index == 4:
                     current_state["open"] = False
             elif event.key == pygame.K_ESCAPE:
                 current_state["open"] = False

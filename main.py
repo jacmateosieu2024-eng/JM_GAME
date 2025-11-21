@@ -1,4 +1,4 @@
-"""Entry point for the Desert Portals game."""
+"""Entry point for the Desert/Forest Portals game."""
 
 import random
 import sys
@@ -29,6 +29,7 @@ class Game:
             "speed_index": config.DEFAULT_SPEED_INDEX,
             "fullscreen": False,
             "heat_haze": config.HEAT_HAZE_ENABLED,
+            "night_level": config.DEFAULT_NIGHT_LEVEL_INDEX,
         }
 
         self.hud = hud.HUD()
@@ -41,14 +42,24 @@ class Game:
             ["Reprendre", "Sauvegarder", "Paramètres", "Quitter au menu"],
         )
 
+        self.portal_cooldown = 0
+        self.time_of_day = 0.0
+
         self._start_new_game()
 
-    def _start_new_game(self):
-        self.world = world.World()
+    def _start_new_game(self, seed: int | None = None):
+        self.seed = seed or random.randint(0, 999999)
+        self.worlds = {
+            "desert": world.World("desert", self.seed),
+            "forest": world.World("forest", self.seed),
+        }
+        self.current_world = "desert"
         self.player = player.Player(speed_index=self.settings["speed_index"])
-        self.true_portal, self.fake_portal = portals.place_portals(pygame.Vector2(config.PLAYER_SPAWN))
-        self.camera = world.Camera(self.world.width, self.world.height)
+        self.true_portal, self.trap_portal = portals.place_portals(pygame.Vector2(config.PLAYER_SPAWN))
+        self.camera = world.Camera(config.WORLD_WIDTH, config.WORLD_HEIGHT)
         self.victory = False
+        self.time_of_day = 0.0
+        self.portal_cooldown = 0
 
     def _toggle_fullscreen(self):
         self.settings["fullscreen"] = not self.settings["fullscreen"]
@@ -85,11 +96,28 @@ class Game:
             self._start_new_game()
             self.state = "running"
         elif choice == 1:
-            loaded = saveio.load_game(player.Player, world.World, portals.Portal)
+            loaded = saveio.load_game(player.Player, portals.Portal)
             if loaded:
-                self.player, self.world, (self.true_portal, self.fake_portal), settings = loaded
+                (
+                    self.player,
+                    self.worlds,
+                    (self.true_portal, self.trap_portal),
+                    settings,
+                    current_world,
+                    self.time_of_day,
+                ) = loaded
                 self.settings.update(settings)
+                for key, default in [
+                    ("speed_index", config.DEFAULT_SPEED_INDEX),
+                    ("fullscreen", False),
+                    ("heat_haze", config.HEAT_HAZE_ENABLED),
+                    ("night_level", config.DEFAULT_NIGHT_LEVEL_INDEX),
+                ]:
+                    if key not in self.settings:
+                        self.settings[key] = default
+                self.current_world = current_world
                 config.HEAT_HAZE_ENABLED = self.settings.get("heat_haze", config.HEAT_HAZE_ENABLED)
+                self.player.speed_index = self.settings.get("speed_index", self.player.speed_index)
                 self.state = "running"
         elif choice == 2:
             self.state = "settings"
@@ -99,37 +127,51 @@ class Game:
         self.screen.fill((0, 0, 0))
         self.main_menu.draw(self.screen)
         if self.state == "settings":
-            self.settings["open"] = True
-            while self.settings.get("open"):
-                events = pygame.event.get()
-                self.screen.fill((0, 0, 0))
-                self.settings = menu.settings_menu(self.screen, self.settings, events)
-                pygame.display.flip()
-                self.clock.tick(30)
-                config.HEAT_HAZE_ENABLED = self.settings["heat_haze"]
-                self.player.speed_index = self.settings["speed_index"]
-                if self.settings["fullscreen"] != pygame.display.is_fullscreen():
-                    self._toggle_fullscreen()
+            self._open_settings_menu()
             self.state = "menu"
+
+    def _open_settings_menu(self):
+        self.settings["open"] = True
+        while self.settings.get("open"):
+            events = pygame.event.get()
+            self.screen.fill((0, 0, 0))
+            self.settings = menu.settings_menu(self.screen, self.settings, events)
+            pygame.display.flip()
+            self.clock.tick(30)
+            config.HEAT_HAZE_ENABLED = self.settings["heat_haze"]
+            self.player.speed_index = self.settings["speed_index"]
+            if self.settings["fullscreen"] != pygame.display.is_fullscreen():
+                self._toggle_fullscreen()
 
     def update_gameplay(self, dt, events):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_ESCAPE]:
             self.state = "paused"
             return
-        self.player.handle_input(keys, dt)
+        current = self.worlds[self.current_world]
+        self.player.handle_input(keys, dt, current)
         self.camera.update(self.player.pos, self.screen.get_rect())
-        pickup = self.world.remove_pickup_at(self.player.pos)
+        pickup = current.remove_pickup_at(self.player.pos)
         self.player.collect(pickup)
 
-        if self.true_portal and self.true_portal.collides_with(self.player.rect):
-            self.victory = True
-            self.state = "victory"
-        elif self.fake_portal and self.fake_portal.collides_with(self.player.rect):
-            self.player.pos = pygame.Vector2(config.PLAYER_SPAWN)
-            self.player.rect.center = self.player.pos
+        now = pygame.time.get_ticks()
+        if now > self.portal_cooldown:
+            if self.true_portal and self.true_portal.collides_with(self.player.rect):
+                self.victory = True
+                self.state = "victory"
+            elif self.trap_portal and self.trap_portal.collides_with(self.player.rect):
+                self._toggle_world()
+                self.portal_cooldown = now + 800
 
+        self.time_of_day += dt / 1000.0
         self.draw_game(dt)
+
+    def _toggle_world(self):
+        self.current_world = "forest" if self.current_world == "desert" else "desert"
+        # Avoid being stuck inside a rock after switching
+        if self.worlds[self.current_world].colliding_rocks(self.player.rect):
+            self.player.pos = pygame.Vector2(config.PLAYER_SPAWN)
+            self.player._update_rect()
 
     def handle_pause_menu(self, events):
         choice = self.pause_menu.update(events)
@@ -138,23 +180,15 @@ class Game:
         elif choice == 1:
             saveio.save_game(
                 self.player,
-                self.world,
-                (self.true_portal, self.fake_portal),
+                self.worlds,
+                self.current_world,
+                (self.true_portal, self.trap_portal),
                 self.settings,
+                self.time_of_day,
             )
             self.state = "running"
         elif choice == 2:
-            self.settings["open"] = True
-            while self.settings.get("open"):
-                events = pygame.event.get()
-                self.screen.fill((0, 0, 0))
-                self.settings = menu.settings_menu(self.screen, self.settings, events)
-                pygame.display.flip()
-                self.clock.tick(30)
-                config.HEAT_HAZE_ENABLED = self.settings["heat_haze"]
-                self.player.speed_index = self.settings["speed_index"]
-                if self.settings["fullscreen"] != pygame.display.is_fullscreen():
-                    self._toggle_fullscreen()
+            self._open_settings_menu()
             self.state = "paused"
         elif choice == 3:
             self.state = "menu"
@@ -164,22 +198,30 @@ class Game:
 
     def draw_game(self, dt):
         canvas = pygame.Surface(self.screen.get_size())
-        self.world.draw(canvas, self.camera)
+        current = self.worlds[self.current_world]
+        current.draw(canvas, self.camera)
         if self.true_portal:
             self.true_portal.draw(canvas, self.camera, pygame.time.get_ticks())
-        if self.fake_portal:
-            self.fake_portal.draw(canvas, self.camera, pygame.time.get_ticks())
+        if self.trap_portal:
+            self.trap_portal.draw(canvas, self.camera, pygame.time.get_ticks())
         self.player.draw(canvas, self.camera)
-        self.hud.draw(canvas, self.player, self.true_portal, self.camera, dt)
+        self.hud.draw(canvas, self.player, self.true_portal, self.camera, dt, self.time_of_day)
 
-        if config.HEAT_HAZE_ENABLED:
+        brightness = config.NIGHT_LEVELS[self.settings.get("night_level", config.DEFAULT_NIGHT_LEVEL_INDEX)]
+        player_screen_pos = pygame.Vector2(
+            self.player.pos.x - self.camera.offset.x,
+            self.player.pos.y - self.camera.offset.y,
+        )
+        canvas = effects.apply_day_night(canvas, player_screen_pos, self.time_of_day, brightness, self.player.inventory.get("lamp", False))
+
+        if config.HEAT_HAZE_ENABLED and self.current_world == "desert":
             canvas = effects.apply_heat_haze(canvas, pygame.time.get_ticks())
         self.screen.blit(canvas, (0, 0))
 
     def draw_victory(self, events):
         for event in events:
             if event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                self._start_new_game()
+                self._start_new_game(self.seed)
                 self.state = "running"
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.state = "menu"
