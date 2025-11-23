@@ -93,6 +93,22 @@ class Game:
                     self.running = False
                 elif event.type == pygame.VIDEORESIZE:
                     self.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                        # --- DEBUG: touches 8/9/0 (pas besoin de Fn sur Mac) ---
+                elif event.type == pygame.KEYDOWN:
+                    # 8 : afficher positions dans le Terminal
+                    if event.key == pygame.K_8 and self.true_portal and self.trap_portal:
+                        print("Player:", int(self.player.pos.x), int(self.player.pos.y))
+                        print("Portal A (real):", int(self.true_portal.pos.x), int(self.true_portal.pos.y))
+                        print("Portal B (trap):", int(self.trap_portal.pos.x), int(self.trap_portal.pos.y))
+            
+                    # 9 : téléporter près du portail réel
+                    elif event.key == pygame.K_9 and self.true_portal:
+                        self.player.pos.update(self.true_portal.pos.x + 40, self.true_portal.pos.y)
+            
+                    # 0 : téléporter près du portail piège
+                    elif event.key == pygame.K_0 and self.trap_portal:
+                        self.player.pos.update(self.trap_portal.pos.x + 40, self.trap_portal.pos.y)
+
 
             if self.state == "menu":
                 self.handle_main_menu(events)
