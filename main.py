@@ -65,7 +65,7 @@ class Game:
         self.settings["fullscreen"] = not self.settings["fullscreen"]
         if self.settings["fullscreen"]:
             self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-        else:
+        elif:
             self.screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.RESIZABLE)
                 # --- DEBUG TELEPORT PORTALS ---
         elif event.type == pygame.KEYDOWN:
