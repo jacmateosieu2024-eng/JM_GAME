@@ -15,22 +15,44 @@ class Portal:
         self.radius = config.PORTAL_RADIUS
         self.phase = random.random() * math.pi
         self.tint_shift = random.randint(-8, 8)
-
+    
     def draw(self, surface: pygame.Surface, camera, time_ms: int):
+        # Couleur de base avec légère variation
         base_color = tuple(max(0, min(255, c + self.tint_shift)) for c in config.PORTAL_BASE_COLOR)
         color = base_color
+    
+        # En mode DEBUG, forcer une couleur très visible
+        if getattr(config, "DEBUG", False):
+            color = getattr(config, "PORTAL_DEBUG_COLOR", (255, 0, 255))
+    
+        # Pulsation
         pulse = 2 + int(2 * math.sin(time_ms * 0.005 + self.phase))
-        rect = pygame.Rect(
+    
+        # Rect monde -> écran
+        world_rect = pygame.Rect(
             self.pos.x - self.radius - pulse,
             self.pos.y - self.radius - pulse,
             2 * (self.radius + pulse),
             2 * (self.radius + pulse),
         )
-        rect = camera.apply(rect)
-        ring = pygame.Surface(rect.size, pygame.SRCALPHA)
-        pygame.draw.ellipse(ring, (*color, config.PORTAL_RING_ALPHA), ring.get_rect(), width=6)
-        pygame.draw.ellipse(ring, config.PORTAL_EDGE_COLOR, ring.get_rect().inflate(-8, -8), width=2)
-        surface.blit(ring, rect.topleft)
+        screen_rect = camera.apply(world_rect)
+        cx, cy = screen_rect.center
+    
+        # HALO blanc (visible de jour comme de nuit)
+        pygame.draw.circle(surface, (255, 255, 255), (cx, cy), self.radius + 8, 3)
+    
+        # 3 anneaux épais
+        for i in range(3):
+            rr = int(self.radius + i * 6 + 3 * math.sin(self.phase + i + time_ms * 0.005))
+            pygame.draw.circle(surface, color, (cx, cy), rr, 3)
+    
+        # Point central
+        pygame.draw.circle(surface, (255, 255, 255), (cx, cy), 4)
+    
+        # --- DEBUG : croix magenta au centre (immanquable)
+        if getattr(config, "DEBUG", False):
+            pygame.draw.line(surface, (255, 0, 255), (cx - 12, cy), (cx + 12, cy), 3)
+            pygame.draw.line(surface, (255, 0, 255), (cx, cy - 12), (cx, cy + 12), 3)
 
     def collides_with(self, player_rect: pygame.Rect) -> bool:
         distance = pygame.Vector2(player_rect.center).distance_to(self.pos)
