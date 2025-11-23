@@ -89,3 +89,6 @@ SAVE_FILE = "save.json"
 
 pygame.font.init()
 DEFAULT_FONT = pygame.font.get_default_font()
+# --- DEBUG ---
+DEBUG = True
+PORTAL_DEBUG_COLOR = (255, 0, 255)  # magenta pétant pour tests
