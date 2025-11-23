@@ -67,6 +67,22 @@ class Game:
             self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
             self.screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.RESIZABLE)
+                # --- DEBUG TELEPORT PORTALS ---
+        elif event.type == pygame.KEYDOWN:
+            # 8 : afficher coordonnées dans le terminal
+            if event.key == pygame.K_8:
+                print("Player:", int(self.player.pos.x), int(self.player.pos.y))
+                print("Portal A (real):", int(self.true_portal.pos.x), int(self.true_portal.pos.y))
+                print("Portal B (trap):", int(self.trap_portal.pos.x), int(self.trap_portal.pos.y))
+    
+            # 9 : téléporter près du portail réel
+            elif event.key == pygame.K_9:
+                self.player.pos.update(self.true_portal.pos.x + 40, self.true_portal.pos.y)
+    
+            # 0 : téléporter près du portail piège
+            elif event.key == pygame.K_0:
+                self.player.pos.update(self.trap_portal.pos.x + 40, self.trap_portal.pos.y)
+
 
     def run(self):
         while self.running:
