@@ -56,6 +56,12 @@ class Game:
         self.current_world = "desert"
         self.player = player.Player(speed_index=self.settings["speed_index"])
         self.true_portal, self.trap_portal = portals.place_portals(pygame.Vector2(config.PLAYER_SPAWN))
+                # DEBUG: rapprocher les portails pour les voir tout de suite
+        if self.true_portal:
+            self.true_portal.pos.update(config.PLAYER_SPAWN[0] + 260, config.PLAYER_SPAWN[1])
+        if self.trap_portal:
+            self.trap_portal.pos.update(config.PLAYER_SPAWN[0] - 260, config.PLAYER_SPAWN[1])
+
         self.camera = world.Camera(config.WORLD_WIDTH, config.WORLD_HEIGHT)
         self.victory = False
         self.time_of_day = 0.0
